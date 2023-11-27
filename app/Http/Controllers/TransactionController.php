@@ -6,19 +6,61 @@ use App\Http\Requests\TransactionRequest;
 use App\Http\Requests\TransferRequest;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\BankService;
+use Faker\Core\Number;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class TransactionController extends Controller
 {
+    private $bankService;
 
-
-    public function dashboard()
+    public function __construct(BankService $bankService)
     {
-        $transactions = Transaction::where('from', Auth::user()->email)
-        ->orWhere('to', Auth::user()->email)
-        ->latest()
-        ->get();
+        $this->bankService = $bankService;
+    }
+
+
+    public function dashboard(Request $request)
+    {
+
+        /*
+        $transactions = Transaction::where('cash_to', Auth::user()->email)
+            ->orWhere('cash_from', Auth::user()->email)
+            ->oldest()
+            ->get();
+
+        $balance = 0;
+        foreach($transactions as $transaction) {
+            $transaction->type() == "CREDIT" ? 
+                            $balance += $transaction->amount : 
+                            $balance -= $transaction->amount;
+            $transaction['balance'] = $balance; 
+        }
+        */
+
+        $transactions = Transaction::select(
+            '*',
+            DB::raw('SUM(
+                CASE 
+                    WHEN type = "TRANSFER" AND (cash_to = ?) THEN amount AND (cash_from = ?) THEN -amount
+                    WHEN type = "CREDIT" THEN amount 
+                    WHEN type = "DEBIT" THEN -amount 
+                    ELSE 0 
+                END
+            ) OVER (ORDER BY created_at) as balance'),
+        )
+        ->addBinding(Auth::user()->email, 'select')
+        ->addBinding(Auth::user()->email, 'select')
+        ->where(function ($query) {
+            $userEmail = Auth::user()->email;
+            $query->where('cash_to', $userEmail)->orWhere('cash_from', $userEmail);
+        })
+        ->oldest()
+        ->paginate(5);
+        
         return view('dashboard', compact('transactions'));
     }
 
@@ -29,51 +71,28 @@ class TransactionController extends Controller
     
     public function doCashDeposit(TransactionRequest $request) 
     {
-
         try {
-            $transaction = new Transaction();
-            $user = User::find(Auth::user()->id);
 
-            $transaction->from = Auth::user()->email;
-            $transaction->to = Auth::user()->email;
-            $transaction->amount = $request->amount;
-            $transaction->type = 'DEPOSIT';
-            $user->account_balance = $user->account_balance + $request->amount;
-            $transaction->status = 'COMPLETED';
-
-            $user->save();
-            $transaction->save();
+            $accountToDeposit = User::find(Auth::user()->id);
+            $this->bankService->deposit($accountToDeposit, $request->amount);
 
             return redirect()->route('transactions')->with(['success'=>'Transaction Completed']);
         } catch (\Throwable $th) {
             return redirect()->route('transactions')->with(['error'=>'Transaction Failed']);
         }
-        
     }
 
     public function doCashWithdrawal(TransactionRequest $request) 
     {
 
         try {
-            $transaction = new Transaction();
-            $user = User::find(Auth::user()->id);
-
-            $transaction->from = Auth::user()->email;
-            $transaction->to = Auth::user()->email;
-            $transaction->amount = $request->amount;
-            $transaction->type = 'WITHDRAWAL';
-
-            if(Auth::user()->account_balance <  $request->amount) {
-                $transaction->status = 'FAILED';
-                $transaction->save();
+            
+            $accountToWithdraw = User::find(Auth::user()->id);
+            if($accountToWithdraw->balance <  $request->amount) {
                 return redirect()->route('transactions')->with(['error'=>'Transaction Failed. No Sufficient Balance for Withdrawal.']);
             }
             
-            $user->account_balance = ($user->account_balance - $request->amount);
-            $user->save();
-            
-            $transaction->status = 'COMPLETED';
-            $transaction->save();
+            $this->bankService->withdrawal($accountToWithdraw, $request->amount);
 
             return redirect()->route('transactions')->with(['success'=>'Transaction Completed']);
         } catch (\Throwable $th) {
@@ -86,33 +105,19 @@ class TransactionController extends Controller
     {
 
         try {
-            $transaction = new Transaction();
-            $userFrom = User::find(Auth::user()->id);
-            $userTo = User::where('email', $request->email)->first();
+
+            $accountToWithdraw = User::find(Auth::user()->id);
+            $accountToDeposit = User::where('email', $request->email)->first();
             
-            if($userTo == NULL){
+            if($accountToDeposit == NULL){
                 return redirect()->route('transactions')->with(['error'=>'Transaction Failed. No User with Given Email Found.']);
             }
 
-            $transaction->from = Auth::user()->email;
-            $transaction->to = $request->email;
-            $transaction->amount = $request->amount;
-            $transaction->type = 'TRANSFER';
-
-            if(Auth::user()->account_balance <  $request->amount) {
-                $transaction->status = 'FAILED';
-                $transaction->save();
+            if($accountToWithdraw->balance <  $request->amount) {
                 return redirect()->route('transactions')->with(['error'=>'Transaction Failed. No Sufficient Balance for Transfer.']);
             }
 
-            $userFrom->account_balance = ($userFrom->account_balance - $request->amount);
-            $userFrom->save();
-
-            $userTo->account_balance = ($userTo->account_balance + $request->amount);
-            $userTo->save();
-
-            $transaction->status = 'COMPLETED';
-            $transaction->save();
+            $this->bankService->transfer($accountToWithdraw, $accountToDeposit, $request->amount);
 
             return redirect()->route('transactions')->with(['success'=>'Transaction Completed']);
         } catch (\Throwable $th) {

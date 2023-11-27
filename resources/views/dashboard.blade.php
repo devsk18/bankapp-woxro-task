@@ -25,7 +25,7 @@
                             <tr>
                                 <td>Balance</td>
                                 <td width="10%">:</td>
-                                <td>{{ number_format(Auth::user()->account_balance, 2) }} Rs</td>
+                                <td>{{ number_format(Auth::user()->account_balance, 2) }} INR</td>
                             </tr>
                         </table>
                     </div>
@@ -34,7 +34,7 @@
         </div>
     </div>
 
-    <div>
+    <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 bg-white border-b border-gray-200">
@@ -42,30 +42,33 @@
                     <div class="details p-3">
                         <table class="table">
                             <thead>
-                                <th>Transation ID</th>
-                                <th>Transation From</th>
-                                <th>Transation To</th>
+                                <th>#</th>
+                                <th>Time</th>
                                 <th>Amount</th>
                                 <th>Type</th>
-                                <th>Status</th>
-                                <th>Time</th>
+                                <th>Transation Details</th>
+                                <th>Balance</th>
                             </thead>
                             <tbody>
                                 @if($transactions)
-                                    @foreach($transactions as $transaction)
-                                    <tr>
-                                        <td>{{ $transaction->id }}</td>
-                                        <td>{{ $transaction->from }}</td>
-                                        <td>{{ $transaction->to }}</td>
-                                        <td>{{ $transaction->amount }}</td>
-                                        <td>{{ $transaction->type }}</td>
-                                        <td>{{ $transaction->status }}</td>
-                                        <td>{{ $transaction->created_at->format('Y-m-d H:i:s') }}</td>
-                                    </tr>
-                                    @endforeach
+                                @foreach($transactions as $transaction)
+                                <tr>
+                                    <td>{{ ($transactions->currentPage() - 1) * $transactions->perPage() + $loop->index + 1 }}</td>
+                                    <td>{{ $transaction->created_at }}</td>
+                                    <td>{{ $transaction->amount_formatted }}</td>
+                                    <td>{{ $transaction->type() }}</td>
+                                    <td>{{ $transaction->details() }}</td>
+                                    <td>
+                                        {{
+                                            number_format($transaction->balance, 2) 
+                                        }}
+                                    </td>
+                                </tr>
+                                @endforeach
                                 @endif
                             </tbody>
                         </table>
+                        {{ $transactions->links() }}
                     </div>
                 </div>
             </div>
