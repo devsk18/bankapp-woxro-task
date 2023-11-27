@@ -25,38 +25,29 @@ class TransactionController extends Controller
 
     public function dashboard(Request $request)
     {
-
-        /*
-        $transactions = Transaction::where('cash_to', Auth::user()->email)
-            ->orWhere('cash_from', Auth::user()->email)
-            ->oldest()
-            ->get();
-
-        $balance = 0;
-        foreach($transactions as $transaction) {
-            $transaction->type() == "CREDIT" ? 
-                            $balance += $transaction->amount : 
-                            $balance -= $transaction->amount;
-            $transaction['balance'] = $balance; 
-        }
-        */
-
-        $transactions = Transaction::select(
+        $currentUserEmail = Auth::user()->email;
+        $transactions = Transaction::select([
             '*',
-            DB::raw('SUM(
-                CASE 
-                    WHEN type = "TRANSFER" AND (cash_to = ?) THEN amount AND (cash_from = ?) THEN -amount
-                    WHEN type = "CREDIT" THEN amount 
-                    WHEN type = "DEBIT" THEN -amount 
-                    ELSE 0 
-                END
-            ) OVER (ORDER BY created_at) as balance'),
-        )
-        ->addBinding(Auth::user()->email, 'select')
-        ->addBinding(Auth::user()->email, 'select')
-        ->where(function ($query) {
-            $userEmail = Auth::user()->email;
-            $query->where('cash_to', $userEmail)->orWhere('cash_from', $userEmail);
+            DB::raw('(
+                SELECT SUM(
+                    CASE
+                        WHEN type = "CREDIT" OR (type = "TRANSFER" AND cash_to = ?) THEN amount
+                        WHEN type = "DEBIT" OR (type = "TRANSFER" AND cash_from = ?) THEN -amount
+                        ELSE 0
+                    END
+                ) 
+                FROM transactions AS t2 
+                WHERE (t2.created_at <= transactions.created_at) 
+                AND (cash_from = ? OR cash_to = ?)
+            ) AS balance')
+        ])
+        ->addBinding($currentUserEmail, 'select')
+        ->addBinding($currentUserEmail, 'select')
+        ->addBinding($currentUserEmail, 'select')
+        ->addBinding($currentUserEmail, 'select')
+        ->where(function ($query) use ($currentUserEmail) {
+            $query->where('cash_to', $currentUserEmail)
+                ->orWhere('cash_from', $currentUserEmail);
         })
         ->oldest()
         ->paginate(5);
