@@ -60,4 +60,20 @@ class AuthController extends ApiResponseController
         }
 
     }
+
+
+    public function logout() 
+    {
+        try {
+            
+            $user = User::find(Auth::user()->id);
+            $user->tokens()->delete();
+
+            return $this->sendResponse([],'User logged out successfully');
+
+        } catch (\Throwable $th) {
+
+            return $this->sendError('Something Went Wrong', $th, 500);
+        }
+    }
 }
