@@ -17,15 +17,16 @@ class TransactionController extends ApiResponseController
 
             $transferData = Transaction::where('type', 'TRANSFER')
             ->where(function ($query) {
-                $query->where('to', Auth::user()->email)
-                      ->orWhere('from', Auth::user()->email);
+                $query->where('cash_to', Auth::user()->email)
+                      ->orWhere('cash_from', Auth::user()->email);
             })
             ->get();
+
 
             return $this->sendResponse(TransactionResource::collection($transferData), "Success");
         
         } catch (\Throwable $th) {
-            return $this->sendError("Something Went Wrong.", 500);
+            return $this->sendError("Something Went Wrong.", $th, 500);
         }
     }
 }

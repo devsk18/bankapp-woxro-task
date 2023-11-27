@@ -16,13 +16,12 @@ class TransactionResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'transaction_from' => $this->from,
-            'transaction_to' => $this->to,
+            'transaction_from' => $this->cash_from,
+            'transaction_to' => $this->cash_to,
             'amount' => $this->amount,
             'type' => $this->type,
             'status' => $this->status,
-            'created_at' => $this->created_at->format('d-m-Y H:i A'),
-            'updated_at' => $this->updated_at->format('d-m-Y H:i A')
+            'transaction_timestamp' => $this->created_at,
         ];
     }
 }
